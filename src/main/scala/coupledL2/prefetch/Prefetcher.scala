@@ -289,6 +289,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
   val pfRcv = if (hasReceiver) Some(Module(new PrefetchReceiver())) else None
 
   // =================== Connection for each Prefetcher =====================
+  io.tlb_req <> DontCare
   if (hasBOP) {
     vbop.get.io.req.ready := true.B
     vbop.get.io.train <> io.train

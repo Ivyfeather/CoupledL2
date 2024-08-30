@@ -15,19 +15,19 @@
   * *************************************************************************************
   */
 
-package coupledL2.tl2tl
+package coupledL2AsL1.tl2tl
 
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.tilelink._
-import freechips.rocketchip.tilelink.TLMessages._
-import freechips.rocketchip.util.leftOR
-import org.chipsalliance.cde.config.Parameters
 import coupledL2._
-import coupledL2.utils._
+import coupledL2.tl2tl._
 import coupledL2.debug._
-import coupledL2.prefetch.PrefetchIO
-import utility.RegNextN
+import coupledL2.utils._
+import coupledL2AsL1.{SinkA => L1SinkA}
+import coupledL2AsL1.tl2tl.{MainPipe => L1MainPipe}
+import freechips.rocketchip.tilelink.TLMessages._
+import freechips.rocketchip.tilelink._
+import org.chipsalliance.cde.config.Parameters
 
 class OuterBundle(params: TLBundleParameters) extends TLBundle(params) with BaseOuterBundle
 
@@ -39,13 +39,12 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle] {
 
   val reqArb = Module(new RequestArb())
   val a_reqBuf = Module(new RequestBuffer)
-  val mainPipe = Module(new MainPipe())
+  val mainPipe = Module(new L1MainPipe())
   val mshrCtl = Module(new MSHRCtl())
-  val directory = Module(Directory())
-  val directoryTest = Module(DirectoryTest())
+  val directory = Module(new Directory())
   val dataStorage = Module(new DataStorage())
   val refillUnit = Module(new RefillUnit())
-  val sinkA = Module(new SinkA)
+  val sinkA = Module(new L1SinkA)
   val sinkB = Module(new SinkB)
   val sinkC = Module(new SinkC)
   val sourceC = Module(new SourceC)
@@ -93,9 +92,6 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle] {
   directory.io.metaWReq <> mainPipe.io.metaWReq
   directory.io.tagWReq <> mainPipe.io.tagWReq
   directory.io.msInfo <> mshrCtl.io.msInfo
-
-  directoryTest.io.metaWReq <> mainPipe.io.metaWReq
-  directoryTest.io.tagWReq <> mainPipe.io.tagWReq
 
   dataStorage.io.req <> mainPipe.io.toDS.req_s3
   dataStorage.io.wdata := mainPipe.io.toDS.wdata_s3

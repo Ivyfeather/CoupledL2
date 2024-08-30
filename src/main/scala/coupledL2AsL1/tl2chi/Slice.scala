@@ -15,7 +15,7 @@
   * *************************************************************************************
   */
 
-package coupledL2.tl2chi
+package coupledL2AsL1.tl2chi
 
 import chisel3._
 import chisel3.util._
@@ -23,6 +23,9 @@ import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config.Parameters
 import coupledL2._
 import coupledL2.prefetch.PrefetchIO
+import coupledL2.tl2chi._
+import coupledL2AsL1.{SinkA => L1SinkA}
+import coupledL2AsL1.tl2chi.{MainPipe => L1MainPipe}
 
 class OuterBundle extends DecoupledPortIO with BaseOuterBundle
 
@@ -37,7 +40,7 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
   val io_msStatus = topDownOpt.map(_ => IO(Vec(mshrsAll, ValidIO(new MSHRStatus))))
 
   /* Upwards TileLink-related modules */
-  val sinkA = Module(new SinkA)
+  val sinkA = Module(new L1SinkA)
   val sinkC = Module(new SinkC)
   val grantBuf = Module(new GrantBuffer)
 
@@ -50,14 +53,13 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
   val rxrsp = Module(new RXRSP())
 
   /* Data path and control path */
-  val directory = Module(Directory())
-  val directoryTest = Module(DirectoryTest())
+  val directory = Module(new Directory())
   val dataStorage = Module(new DataStorage())
   val refillBuf = Module(new MSHRBuffer(wPorts = 2))
   val releaseBuf = Module(new MSHRBuffer(wPorts = 3))
 
   val reqArb = Module(new RequestArb())
-  val mainPipe = Module(new MainPipe())
+  val mainPipe = Module(new L1MainPipe())
   val reqBuf = Module(new RequestBuffer())
   val mshrCtl = Module(new MSHRCtl())
 
@@ -86,9 +88,6 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
   directory.io.metaWReq := mainPipe.io.metaWReq
   directory.io.tagWReq := mainPipe.io.tagWReq
   directory.io.msInfo := mshrCtl.io.msInfo
-
-  directoryTest.io.metaWReq <> mainPipe.io.metaWReq
-  directoryTest.io.tagWReq <> mainPipe.io.tagWReq
 
   dataStorage.io.req := mainPipe.io.toDS.req_s3
   dataStorage.io.wdata := mainPipe.io.toDS.wdata_s3
@@ -145,8 +144,8 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
   /* Read and write release buffer */
   releaseBuf.io.r := reqArb.io.releaseBufRead_s2
   val nestedWriteReleaseBuf,
-    sinkCWriteReleaseBuf,
-    mpWriteReleaseBuf = Wire(Valid(new MSHRBufWrite()))
+  sinkCWriteReleaseBuf,
+  mpWriteReleaseBuf = Wire(Valid(new MSHRBufWrite()))
   nestedWriteReleaseBuf.valid := mshrCtl.io.nestedwbDataId.valid
   nestedWriteReleaseBuf.bits.data := mainPipe.io.nestedwbData
   nestedWriteReleaseBuf.bits.id := mshrCtl.io.nestedwbDataId.bits

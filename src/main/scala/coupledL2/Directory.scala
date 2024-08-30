@@ -19,11 +19,15 @@ package coupledL2
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.BoringUtils
+import chiselFv._
+import coupledL2.Directory.instanceId
 import freechips.rocketchip.util.SetAssocLRU
 import coupledL2.utils._
 import utility.{ParallelPriorityMux, RegNextN}
 import org.chipsalliance.cde.config.Parameters
-import coupledL2.prefetch.PfSource
+import coupledL2.prefetch.{BOPParameters, PfSource}
+import coupledL2AsL1.prefetch.CoupledL2AsL1PrefParam
 import freechips.rocketchip.tilelink.TLMessages._
 
 class MetaEntry(implicit p: Parameters) extends L2Bundle {
@@ -103,7 +107,7 @@ class TagWrite(implicit p: Parameters) extends L2Bundle {
   val wtag = UInt(tagBits.W)
 }
 
-class Directory(implicit p: Parameters) extends L2Module {
+class Directory(implicit p: Parameters) extends L2Module with Formal {
 
   val io = IO(new Bundle() {
     val read = Flipped(DecoupledIO(new DirRead))
@@ -365,4 +369,31 @@ class Directory(implicit p: Parameters) extends L2Module {
 
   XSPerfAccumulate(cacheParams, "dirRead_cnt", io.read.fire)
   XSPerfAccumulate(cacheParams, "choose_busy_way", reqValid_s3 && !req_s3.wayMask(chosenWay))
+
+  if(instanceId == 0) {
+    BoringUtils.addSource(resetFinish, s"coupledL2_${instanceId}_dir", disableDedup = true)
+  }
+
+  if(cacheParams.prefetch.isEmpty) {
+    assert(!(io.resp.valid && io.resp.bits.hit), "Formal Verification: Hit ") // @ frame > 134, not arrived
+    // assertAt(10.U, io.resp.valid && io.resp.bits.hit, "Formal Verification: Hit ")
+
+    assert(!(io.resp.valid && !io.resp.bits.hit), "Formal Verification: Hit Miss ") // @ frame 132
+    assert(!(io.resp.valid && !io.resp.bits.hit && io.resp.bits.meta.state =/= MetaData.INVALID), "Formal Verification: Replace Happens ") // @ frame > 136, not arrived
+    assert(!(io.read.valid), "Formal Verification: Read Directory Valid ") // @ frame 130 (998.87 s)
+    assert(!(io.metaWReq.valid), "Formal Verification: Update Meta ") // @ frame 2
+    assert(!(io.tagWReq.valid), "Formal Verification: Update Tag ") // @ frame 140 (4576.55 s)
+  // assert(dataStorge.io.req.valid && !dataStorage.io.req.bits.wen, "Formal Verification: Get Data ")
+  }
+}
+
+object Directory {
+  var instanceId: Int = -1
+  def apply()(implicit p: Parameters): Directory = {
+    instanceId += 1
+    println("----------------------------------------")
+    println(s"${instanceId} instantiated Directory")
+    println("----------------------------------------")
+    new Directory()
+  }
 }

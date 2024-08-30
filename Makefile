@@ -5,6 +5,21 @@ init:
 compile:
 	mill -i CoupledL2.compile
 
+verify-l2l3:
+	mill -i CoupledL2.test.runMain coupledL2.VerifyTop_L2L3
+
+verify-l2l3l2:
+	mill -i CoupledL2.test.runMain coupledL2.VerifyTop_L2L3L2
+
+verify-chi:
+	mill -i CoupledL2.test.runMain coupledL2.VerifyTop_CHI_DualCore_0UL
+
+auto-l2l3:
+	mill -i CoupledL2.test.runMain coupledL2.AutoVerify_L2L3
+
+auto-l2l3l2:
+	mill -i CoupledL2.test.runMain coupledL2.AutoVerify_L2L3L2
+
 test-top-l2:
 	mill -i CoupledL2.test.runMain coupledL2.TestTop_L2 -td build
 

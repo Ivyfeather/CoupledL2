@@ -17,21 +17,23 @@
 
 // See LICENSE.SiFive for license details.
 
-package coupledL2
+package coupledL2AsL1
 
 import chisel3._
 import chisel3.util._
-import utility.{FastArbiter, ParallelMax, ParallelPriorityMux, Pipeline, RegNextN}
+import coupledL2._
+import coupledL2.prefetch.{BOPParameters, PrefetchReceiverParams, TPParameters, PrefetchTrain, PrefetchResp}
+import coupledL2AsL1.prefetch._
+import coupledL2AsL1.tl2tl.{Slice => L1Slice}
+import coupledL2.utils.XSPerfAccumulate
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tile.MaxHartIdBits
-import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
+import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
-import org.chipsalliance.cde.config.{Parameters, Field}
-import scala.math.max
-import coupledL2.prefetch._
-import coupledL2.utils.XSPerfAccumulate
-import huancun.{TPmetaReq, TPmetaResp, BankBitsKey}
+import huancun.{BankBitsKey, TPmetaReq, TPmetaResp}
+import org.chipsalliance.cde.config.Parameters
+import utility.{FastArbiter, ParallelPriorityMux, Pipeline, RegNextN}
 
 trait HasCoupledL2Parameters {
   val p: Parameters
@@ -283,6 +285,8 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
     require(banks == node.in.size)
 
     val io = IO(new Bundle {
+      val prefetcherInputRandomAddr = Input(UInt(5.W))
+      val prefetcherNeedT = Input(Bool())
       val hartId = Input(UInt(hartIdLen.W))
     //  val l2_hint = Valid(UInt(32.W))
       val l2_hint = ValidIO(new L2ToL1Hint())
@@ -322,6 +326,8 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
       case BankBitsKey => bankBits
     }
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
+    prefetcher.get.randomIO.inputRandomAddr := io.prefetcherInputRandomAddr
+    prefetcher.get.randomIO.inputNeedT := io.prefetcherNeedT
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
@@ -333,29 +339,6 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
         prefetcher.get.hartId := io.hartId
         fastArb(prefetchResps.get, prefetcher.get.io.resp, Some("prefetch_resp"))
         prefetcher.get.io.tlb_req <> io.l2_tlb_req
-    }
-    pf_recv_node match {
-      case Some(x) =>
-        prefetcher.get.io.recv_addr.valid := x.in.head._1.addr_valid
-        prefetcher.get.io.recv_addr.bits.addr := x.in.head._1.addr
-        prefetcher.get.io.recv_addr.bits.pfSource := x.in.head._1.pf_source
-        prefetcher.get.io_l2_pf_en := x.in.head._1.l2_pf_en
-      case None =>
-        prefetcher.foreach{
-          p =>
-            p.io.recv_addr := 0.U.asTypeOf(p.io.recv_addr)
-            p.io_l2_pf_en := false.B
-        }
-    }
-    tpmeta_source_node match {
-      case Some(x) =>
-        x.out.head._1 <> prefetcher.get.tpio.tpmeta_port.get.req
-      case None =>
-    }
-    tpmeta_sink_node match {
-      case Some(x) =>
-        prefetcher.get.tpio.tpmeta_port.get.resp <> x.in.head._1
-      case None =>
     }
 
     // ** WARNING:TODO: this depends on where the latch is
@@ -385,7 +368,7 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
               case SliceIdKey => i
             }))
           } else {
-            Module(new tl2tl.Slice()(p.alterPartial {
+            Module(new L1Slice()(p.alterPartial {
               case EdgeInKey => edgeIn
               case EdgeOutKey => edgeOut
               case BankBitsKey => bankBits
@@ -477,6 +460,10 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
             out <> slice.io.out
             out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
             out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)
+          case slice: L1Slice =>
+            out <> slice.io.out
+            out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
+            out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)
           case slice: tl2chi.Slice =>
         }
     }
@@ -493,6 +480,7 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
           case (in, s) =>
             s match {
               case slice: tl2tl.Slice => in := slice.io_msStatus.get
+              case slice: L1Slice => in := slice.io_msStatus.get
               case slice: tl2chi.Slice => in := slice.io_msStatus.get
             }
         }

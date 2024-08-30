@@ -20,6 +20,7 @@ package coupledL2.tl2chi
 import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
+import chiselFv.Formal
 import utility._
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tilelink._
@@ -38,7 +39,7 @@ class PCrdInfo(implicit p: Parameters) extends TL2CHIL2Bundle
   val pCrdType = chiOpt.map(_ => UInt(PCRDTYPE_WIDTH.W))
 }
 
-class MSHRCtl(implicit p: Parameters) extends TL2CHIL2Module {
+class MSHRCtl(implicit p: Parameters) extends TL2CHIL2Module with Formal {
   val io = IO(new Bundle() {
     /* interact with req arb */
     val fromReqArb = Input(new Bundle() {
@@ -274,9 +275,9 @@ class MSHRCtl(implicit p: Parameters) extends TL2CHIL2Module {
   XSPerfAccumulate(cacheParams, "capacity_conflict_to_sinkB", mshrFull)
   XSPerfHistogram(cacheParams, "mshr_alloc", io.toMainPipe.mshr_alloc_ptr,
     enable = io.fromMainPipe.mshr_alloc_s3.valid,
-    start = 0, stop = mshrsAll, step = 1)
+    start = 0, stop = mshrsAll, step = 1)*/
   if (cacheParams.enablePerf) {
-    val start = 0
+    /* val start = 0
     val stop = 100
     val step = 5
     val acquire_period = ParallelMux(mshrs.map { case m => m.io.resps.sink_d.valid -> m.acquire_period }) 
@@ -289,20 +290,23 @@ class MSHRCtl(implicit p: Parameters) extends TL2CHIL2Module {
       (io.resps.sinkC.respInfo.opcode === ProbeAck || io.resps.sinkC.respInfo.opcode === ProbeAckData)
     XSPerfHistogram(cacheParams, "acquire_period", acquire_period, acquire_period_en, start, stop, step)
     XSPerfHistogram(cacheParams, "release_period", release_period, release_period_en, start, stop, step)
-    XSPerfHistogram(cacheParams, "probe_period", probe_period, probe_period_en, start, stop, step)
- 
+    XSPerfHistogram(cacheParams, "probe_period", probe_period, probe_period_en, start, stop, step)*/
+
     val timers = RegInit(VecInit(Seq.fill(mshrsAll)(0.U(64.W))))
     for (((timer, m), i) <- timers.zip(mshrs).zipWithIndex) {
       when (m.io.alloc.valid) {
         timer := 1.U
-      }.otherwise {
+      }.elsewhen(m.io.status.valid) {
         timer := timer + 1.U
       }
-      val enable = m.io.status.valid && m.io.status.bits.will_free
+      if(cacheParams.prefetch.isEmpty) {
+        assert(timer <= 1000.U, "TimeOut")
+      }
+      /*val enable = m.io.status.valid && m.io.status.bits.will_free
       XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10),
         timer, enable, 0, 300, 10)
-      XSPerfMax(cacheParams, "mshr_latency", timer, enable)
+      XSPerfMax(cacheParams, "mshr_latency", timer, enable)*/
     }
-  }*/
+  }
 }
 

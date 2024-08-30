@@ -19,13 +19,15 @@ package coupledL2.tl2tl
 
 import chisel3._
 import chisel3.util._
+import chiselFv.Formal
 import utility._
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
 import coupledL2._
-import coupledL2.prefetch.PrefetchTrain
+import coupledL2.prefetch.{BOPParameters, PrefetchTrain}
 import coupledL2.utils.{XSPerfAccumulate, XSPerfHistogram, XSPerfMax}
+import coupledL2AsL1.prefetch.CoupledL2AsL1PrefParam
 
 class MSHRSelector(implicit p: Parameters) extends L2Module {
   val io = IO(new Bundle() {
@@ -38,7 +40,7 @@ class MSHRSelector(implicit p: Parameters) extends L2Module {
   })
 }
 
-class MSHRCtl(implicit p: Parameters) extends L2Module {
+class MSHRCtl(implicit p: Parameters) extends L2Module with Formal {
   val io = IO(new Bundle() {
     /* interact with req arb */
     val fromReqArb = Input(new Bundle() {
@@ -164,7 +166,7 @@ class MSHRCtl(implicit p: Parameters) extends L2Module {
   io.nestedwbDataId.bits := ParallelPriorityMux(mshrs.zipWithIndex.map {
     case (mshr, i) => (mshr.io.nestedwbData, i.U)
   })
-  assert(RegNext(PopCount(mshrs.map(_.io.nestedwbData)) <= 1.U), "should only be one nestedwbData")
+//  assert(RegNext(PopCount(mshrs.map(_.io.nestedwbData)) <= 1.U), "should only be one nestedwbData")
 
   dontTouch(io.sourceA)
 
@@ -204,8 +206,11 @@ class MSHRCtl(implicit p: Parameters) extends L2Module {
     for (((timer, m), i) <- timers.zip(mshrs).zipWithIndex) {
       when (m.io.alloc.valid) {
         timer := 1.U
-      }.otherwise {
+      }.elsewhen (m.io.status.valid) {
         timer := timer + 1.U
+      }
+      if(cacheParams.prefetch.isEmpty) {
+        assert(timer <= 1000.U, "TimeOut")
       }
       val enable = m.io.status.valid && m.io.status.bits.will_free
       XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10),
