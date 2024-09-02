@@ -40,7 +40,7 @@ abstract class TL2CHIL2Module(implicit val p: Parameters) extends Module
 
 class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
 
-  val addressRange = AddressSet(0x00000000L, 0xfffffffffL).subtract(AddressSet(0x0L, 0x7fffffffL)) // TODO: parameterize this
+  val addressRange = Seq(AddressSet(0x0L, 0x1fL)) // TODO: parameterize this
   val managerParameters = TLSlavePortParameters.v1(
     managers = Seq(TLSlaveParameters.v1(
       address = addressRange,
@@ -104,8 +104,14 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
       case slices: Seq[Slice] =>
         // TXREQ
         val txreq_arb = Module(new Arbiter(new CHIREQ, slices.size)) // plus 1 for MMIO
+        txreq_arb.io.in.foreach { in =>
+          in.bits := DontCare
+          in.valid := false.B
+        }
         val txreq = Wire(DecoupledIO(new CHIREQ))
-        slices.zip(txreq_arb.io.in.init).foreach { case (s, in) => in <> s.io.out.tx.req }
+        slices.zip(txreq_arb.io.in.init).foreach { case (s, in) => 
+          in <> s.io.out.tx.req
+        }
         txreq <> txreq_arb.io.out
         txreq.bits.txnID := setSliceID(txreq_arb.io.out.bits.txnID, txreq_arb.io.chosen, false.B)
 

@@ -478,6 +478,7 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
             out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
             out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)
           case slice: tl2chi.Slice =>
+            slice.io.out.tx.req.ready := true.B
         }
     }
 

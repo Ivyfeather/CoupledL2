@@ -559,6 +559,10 @@ class VerifyTop_CHIL2(numCores: Int = 2, numULAgents: Int = 0, banks: Int = 1)(i
     l1s.zipWithIndex.foreach { case (l2AsL1, i) =>
       l2AsL1.module.io.prefetcherInputRandomAddr := io(i).topInputRandomAddrs
       l2AsL1.module.io.prefetcherNeedT := io(i).topInputNeedT
+      l2AsL1.module.io.l2_tlb_req <> DontCare
+      l2AsL1.module.io.debugTopDown <> DontCare
+      l2AsL1.module.io.hartId <> DontCare
+
       dontTouch(l2AsL1.module.io)
     }
 

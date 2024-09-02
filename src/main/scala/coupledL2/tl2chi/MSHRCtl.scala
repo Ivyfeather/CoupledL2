@@ -158,7 +158,7 @@ class MSHRCtl(implicit p: Parameters) extends TL2CHIL2Module with Formal {
 
   val doubleReq = Fill(2, matchPCrdGrant.asUInt)
   val doubleGnt = ~(doubleReq - idxOH.asUInt) & doubleReq
-  val gnt = doubleGnt(31,16) | doubleGnt(15,0)
+  val gnt = doubleGnt(15,0)   //doubleGnt(31,16) | 
   val pCrdPri = VecInit(gnt.asBools)
   val pCrdIsWait = OHToUInt(pCrdPri)
 
