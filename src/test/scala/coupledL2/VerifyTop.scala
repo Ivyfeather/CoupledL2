@@ -519,7 +519,7 @@ class VerifyTop_CHIL2(numCores: Int = 2, numULAgents: Int = 0, banks: Int = 1)(i
   }))))
   val l2_nodes = l2s.map(_.node)
 
-  val bankBinders = (0 until numCores).map(_ => BankBinder(banks, 64))
+  val bankBinders = (0 until numCores).map(_ => BankBinder(banks, 2))
 
   l0_nodes.zip(l1_nodes).foreach { case (l0, l1) => l1 := l0 }
 
@@ -535,17 +535,6 @@ class VerifyTop_CHIL2(numCores: Int = 2, numULAgents: Int = 0, banks: Int = 1)(i
         bankBinders(i) :*=
       l2.node :*=
       l1xbar
-    /**
-      * MMIO: make diplomacy happy
-      */
-    val mmioClientNode = TLClientNode(Seq(
-      TLMasterPortParameters.v1(
-        clients = Seq(TLMasterParameters.v1(
-          "uncache"
-        ))
-      )
-    ))
-    l2.mmioBridge.mmioNode := mmioClientNode
   }
 
   lazy val module = new LazyModuleImp(this){

@@ -55,16 +55,13 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
       supportsHint = access,
       fifoId = None
     )),
-    beatBytes = 32,
+    beatBytes = 1,
     minLatency = 2,
     responseFields = cacheParams.respField,
     requestKeys = cacheParams.reqKey,
     endSinkId = idsAll * (1 << bankBits)
   )
   val managerNode = TLManagerNode(Seq(managerParameters))
-
-  val mmioBridge = LazyModule(new MMIOBridge)
-  val mmioNode = mmioBridge.mmioNode
 
   class CoupledL2Imp(wrapper: LazyModule) extends BaseCoupledL2Imp(wrapper) {
 
@@ -78,17 +75,6 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
     println(s"CHI DAT Width: ${(new CHIDAT).getWidth}")
     println(s"CHI Port Width: ${io_chi.getWidth}")
 
-    println(s"MMIO:")
-    mmioNode.edges.in.headOption.foreach { n =>
-      n.client.clients.zipWithIndex.foreach {
-        case (c, i) =>
-          println(s"\t${i} <= ${c.name};" +
-            s"\tsourceRange: ${c.sourceId.start}~${c.sourceId.end}")
-      }
-    }
-
-    val mmio = mmioBridge.module
-
     // Outer interface connection
     /**
       * TxnID space arrangement:
@@ -96,11 +82,6 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
       * +----------------+-----------+---------------+
       * |    0.U(1.W)    |  SliceID  |  Inner TxnID  |
       * +----------------+-----------+---------------+
-      * Otherwise this is an MMIO request:
-      * +----------------+-----------+---------------+
-      * |    1.U(1.W)    |        Inner TxnID        |
-      * +----------------+---------------------------+  
-      *
       */
     def setSliceID(txnID: UInt, sliceID: UInt, mmio: Bool): UInt = {
       Mux(
@@ -122,12 +103,11 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
     slices match {
       case slices: Seq[Slice] =>
         // TXREQ
-        val txreq_arb = Module(new Arbiter(new CHIREQ, slices.size + 1)) // plus 1 for MMIO
+        val txreq_arb = Module(new Arbiter(new CHIREQ, slices.size)) // plus 1 for MMIO
         val txreq = Wire(DecoupledIO(new CHIREQ))
         slices.zip(txreq_arb.io.in.init).foreach { case (s, in) => in <> s.io.out.tx.req }
-        txreq_arb.io.in.last <> mmio.io.tx.req
         txreq <> txreq_arb.io.out
-        txreq.bits.txnID := setSliceID(txreq_arb.io.out.bits.txnID, txreq_arb.io.chosen, mmio.io.tx.req.fire)
+        txreq.bits.txnID := setSliceID(txreq_arb.io.out.bits.txnID, txreq_arb.io.chosen, false.B)
 
         // TXRSP
         val txrsp = Wire(DecoupledIO(new CHIRSP))
@@ -135,7 +115,7 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
 
         // TXDAT
         val txdat = Wire(DecoupledIO(new CHIDAT))
-        arb(slices.map(_.io.out.tx.dat) :+ mmio.io.tx.dat, txdat, Some("txdat"))
+        arb(slices.map(_.io.out.tx.dat), txdat, Some("txdat"))
 
         // RXSNP
         val rxsnp = Wire(DecoupledIO(new CHISNP))
@@ -180,14 +160,7 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
           s.io.out.rx.rsp.bits := rxrsp.bits
           s.io.out.rx.rsp.bits.txnID := restoreTXNID(rxrsp.bits.txnID)
         }
-        mmio.io.rx.rsp.valid := rxrsp.valid && rxrspIsMMIO
-        mmio.io.rx.rsp.bits := rxrsp.bits
-        mmio.io.rx.rsp.bits.txnID := restoreTXNID(rxrsp.bits.txnID)
-        rxrsp.ready := Mux(
-          rxrspIsMMIO,
-          mmio.io.rx.rsp.ready,
-          Cat(slices.zipWithIndex.map { case (s, i) => s.io.out.rx.rsp.ready && rxrspSliceID === i.U }).orR
-        )
+        rxrsp.ready := Cat(slices.zipWithIndex.map { case (s, i) => s.io.out.rx.rsp.ready && rxrspSliceID === i.U }).orR
 
         // RXDAT
         val rxdat = Wire(DecoupledIO(new CHIDAT))
@@ -198,14 +171,7 @@ class TL2CHICoupledL2(implicit p: Parameters) extends CoupledL2Base {
           s.io.out.rx.dat.bits := rxdat.bits
           s.io.out.rx.dat.bits.txnID := restoreTXNID(rxdat.bits.txnID)
         }
-        mmio.io.rx.dat.valid := rxdat.valid && rxdatIsMMIO
-        mmio.io.rx.dat.bits := rxdat.bits
-        mmio.io.rx.dat.bits.txnID := restoreTXNID(rxdat.bits.txnID)
-        rxdat.ready := Mux(
-          rxdatIsMMIO,
-          mmio.io.rx.dat.ready,
-          Cat(slices.zipWithIndex.map { case (s, i) => s.io.out.rx.dat.ready && rxdatSliceID === i.U}).orR
-        )
+        rxdat.ready := Cat(slices.zipWithIndex.map { case (s, i) => s.io.out.rx.dat.ready && rxdatSliceID === i.U}).orR
 
         val linkMonitor = Module(new LinkMonitor)
         linkMonitor.io.in.tx.req <> txreq
