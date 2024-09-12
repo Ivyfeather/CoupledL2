@@ -31,7 +31,7 @@ import freechips.rocketchip.tile.MaxHartIdBits
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
-import huancun.{BankBitsKey, TPmetaReq, TPmetaResp}
+import huancun.{TPmetaReq, TPmetaResp}
 import org.chipsalliance.cde.config.Parameters
 import utility.{FastArbiter, ParallelPriorityMux, Pipeline, RegNextN}
 
