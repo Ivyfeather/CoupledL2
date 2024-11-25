@@ -87,7 +87,7 @@ class Monitor(implicit p: Parameters) extends L2Module {
   /* ======== ChiselDB ======== */
   if (cacheParams.enableMonitor && !cacheParams.FPGAPlatform) {
     val hartId = cacheParams.hartId
-    val table = ChiselDB.createTable(s"L2MP", new CPL2S3Info, basicDB = true)
+    val table = ChiselDB.createTable(s"L2MP", new CPL2S3Info, basicDB = false)
     val s3Info = Wire(new CPL2S3Info)
     s3Info.mshrTask := req_s3.mshrTask
     s3Info.channel := req_s3.channel

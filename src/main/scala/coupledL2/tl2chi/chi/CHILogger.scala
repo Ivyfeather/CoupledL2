@@ -57,7 +57,7 @@ class CHILogger(name: String, enable: Boolean)
 
   // use RecordMap to generate a Record from ListMap
   val CHILogMessage = RecordMap(all_fields_final)
-  val table = ChiselDB.createTable("CHILog", CHILogMessage, basicDB = true)
+  val table = ChiselDB.createTable("CHILog", CHILogMessage, basicDB = false)
   // println(s"test: ${CHILogMessage.elements}")
   track(io.down, this.clock, this.reset)(name)
 
