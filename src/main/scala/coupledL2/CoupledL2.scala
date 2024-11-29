@@ -246,7 +246,7 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
         fifoId = None
       )
     },
-    beatBytes = 32,
+    beatBytes = 1,
     minLatency = 2,
     responseFields = cacheParams.respField,
     requestKeys = cacheParams.reqKey,

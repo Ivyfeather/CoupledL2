@@ -298,7 +298,7 @@ trait HasCHIMsgParameters {
   def CCID_WIDTH = 2
   def DATAID_WIDTH = 2
   def BE_WIDTH = DATA_WIDTH / 8
-  def DATA_WIDTH = 256
+  def DATA_WIDTH = 8
   def DATACHECK_WIDTH = DATA_WIDTH / 8
   def TAG_WIDTH = DATA_WIDTH / 32
   def TAG_UPDATE_WIDTH = DATA_WIDTH / 128
